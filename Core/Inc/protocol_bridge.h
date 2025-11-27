@@ -40,8 +40,13 @@ extern "C" {
  * - quality (0-255) -> quality (0-255)
  * - mode set to 1 (Mode 1: fused flow data)
  */
+// 修改函数原型，增加 distance_cm 参数
 bool bridge_convert_optical_flow(const mavlink_optical_flow_rad_t *mavlink_flow,
-                                  ano_optical_flow_mode1_t *ano_flow);
+                                 float distance_cm, // 新增：需要高度参与计算
+                                 ano_optical_flow_mode1_t *ano_flow);
+
+// 修正宏定义
+#define DISTANCE_CM_TO_ANO_UNIT 1 // ANO ID 0x34 需要 CM，不需要转换
 
 /**
  * @brief Convert MAVLINK distance sensor to ANO distance

@@ -21,48 +21,54 @@
  * @retval true on successful conversion
  *
  * Conversion Details:
- * - MAVLINK integrated_x/y are in radians (accumulated flow over integration time)
+ * - MAVLINK integrated_x/y are in radians (accumulated flow over integration
+ * time)
  * - ANO expects flow velocity as int16 values
- * - We scale radians by FLOW_RAD_TO_ANO_SCALE (1000.0) to get reasonable int16 values
+ * - We scale radians by FLOW_RAD_TO_ANO_SCALE (1000.0) to get reasonable int16
+ * values
  * - Quality maps directly (0-255)
  */
-bool bridge_convert_optical_flow(const mavlink_optical_flow_rad_t *mavlink_flow,
-                                  ano_optical_flow_mode1_t *ano_flow)
-{
-    if (mavlink_flow == NULL || ano_flow == NULL) {
-        return false;
-    }
+bool bridge_convert_optical_flow(
+    const mavlink_optical_flow_rad_t *mavlink_flow,
+    float distance_cm, // 注意：这里需要传入高度用于计算速度
+    ano_optical_flow_mode1_t *ano_flow) {
+  if (mavlink_flow == NULL || ano_flow == NULL) {
+    return false;
+  }
 
-    // Clear output structure
-    memset(ano_flow, 0, sizeof(ano_optical_flow_mode1_t));
+  // 1. 设置模式
+  ano_flow->mode = 1; // Mode 1: 融合数据
 
-    // Set mode to 1 (fused flow data)
-    ano_flow->mode = ANO_FLOW_MODE_1;
+  // 2. 设置状态 (State)
+  // 根据置信度判断数据是否有效，阈值可设为 50 或 100
+  ano_flow->state = (mavlink_flow->quality > 50) ? 1 : 0;
 
-    // Convert quality (direct mapping)
-    ano_flow->quality = mavlink_flow->quality;
+  // 3. 计算地面速度 (cm/s)
+  // 公式: V = (rad / time_s) * dist_cm
+  if (mavlink_flow->integration_time_us > 0) {
+    float dt_s = (float)mavlink_flow->integration_time_us / 1000000.0f;
 
-    // Convert integrated flow (radians) to scaled int16
-    // MAVLINK: integrated_x/y in radians (accumulated over integration_time_us)
-    // ANO: dx/dy as int16 scaled values
-    //
-    // Scaling: Multiply by 1000 to convert rad to milli-radians for better resolution
-    float dx_scaled = mavlink_flow->integrated_x * FLOW_RAD_TO_ANO_SCALE;
-    float dy_scaled = mavlink_flow->integrated_y * FLOW_RAD_TO_ANO_SCALE;
+    // 限制最小有效高度以防止噪声放大，例如 10cm
+    float valid_dist = (distance_cm > 10.0f) ? distance_cm : 100.0f;
 
-    // Clamp to int16 range [-32768, 32767]
-    if (dx_scaled > 32767.0f) dx_scaled = 32767.0f;
-    if (dx_scaled < -32768.0f) dx_scaled = -32768.0f;
-    if (dy_scaled > 32767.0f) dy_scaled = 32767.0f;
-    if (dy_scaled < -32768.0f) dy_scaled = -32768.0f;
+    // 计算速度
+    float vel_x = (mavlink_flow->integrated_x / dt_s) * valid_dist;
+    float vel_y = (mavlink_flow->integrated_y / dt_s) * valid_dist;
 
-    ano_flow->dx = (int16_t)dx_scaled;
-    ano_flow->dy = (int16_t)dy_scaled;
+    // 4. 填充速度数据 (注意坐标系修正)
+    // 优象T2(右正) -> 匿名(左正)，Y轴取反
+    ano_flow->dx = (int16_t)vel_x;
+    ano_flow->dy = (int16_t)(-vel_y);
+  } else {
+    ano_flow->dx = 0;
+    ano_flow->dy = 0;
+  }
 
-    // Reserved field
-    ano_flow->reserved = 0;
+  // 5. 设置质量 (Quality)
+  // 放在最后一个字节
+  ano_flow->quality = mavlink_flow->quality;
 
-    return true;
+  return true;
 }
 
 /**
@@ -78,54 +84,18 @@ bool bridge_convert_optical_flow(const mavlink_optical_flow_rad_t *mavlink_flow,
  * - Angle set to 0 (downward facing sensor assumed)
  */
 bool bridge_convert_distance(const mavlink_distance_sensor_t *mavlink_distance,
-                              ano_distance_data_t *ano_distance)
-{
-    if (mavlink_distance == NULL || ano_distance == NULL) {
-        return false;
-    }
+                             ano_distance_data_t *ano_distance) {
+  if (mavlink_distance == NULL || ano_distance == NULL) {
+    return false;
+  }
+  memset(ano_distance, 0, sizeof(ano_distance_data_t));
 
-    // Clear output structure
-    memset(ano_distance, 0, sizeof(ano_distance_data_t));
+  // ANO ID 0x34 需要 CM，直接赋值
+  ano_distance->distance_cm = (uint32_t)mavlink_distance->current_distance;
 
-    // Convert distance from cm to mm
-    uint32_t distance_mm = (uint32_t)mavlink_distance->current_distance * DISTANCE_CM_TO_MM;
+  // 固定方向向下
+  ano_distance->direction = 0;
+  ano_distance->angle = 0;
 
-    // Clamp to uint16 range [0, 65535] mm
-    if (distance_mm > 65535) {
-        distance_mm = 65535;
-    }
-
-    ano_distance->distance_mm = (uint16_t)distance_mm;
-
-    // Map MAVLINK orientation to ANO direction
-    // MAVLINK orientation: 0=forward, 1=right, 2=back, 3=left, 4=up, 5=down
-    // ANO direction: typically 0=down, 1=forward
-    switch (mavlink_distance->orientation) {
-        case 5:  // MAVLINK: down
-            ano_distance->direction = 0;  // ANO: down
-            ano_distance->angle = 0;      // 0 degrees (downward)
-            break;
-        case 0:  // MAVLINK: forward
-            ano_distance->direction = 1;  // ANO: forward
-            ano_distance->angle = 90;     // 90 degrees (forward)
-            break;
-        default:
-            ano_distance->direction = mavlink_distance->orientation;
-            ano_distance->angle = 0;
-            break;
-    }
-
-    // Set status based on covariance (0 = good, higher = worse)
-    // ANO status: 0 = valid, 1 = invalid (simple mapping)
-    if (mavlink_distance->covariance < 100) {
-        ano_distance->status = 0;  // Valid measurement
-    } else {
-        ano_distance->status = 1;  // Invalid measurement
-    }
-
-    // Reserved fields
-    ano_distance->reserved1 = 0;
-    ano_distance->reserved2 = 0;
-
-    return true;
+  return true;
 }
