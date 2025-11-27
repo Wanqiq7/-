@@ -1,0 +1,29 @@
+{
+    // 启动调试的快捷键是F5
+    "version": "0.2.0",
+    "configurations": [
+        // 使用dap-link(如无线调试器时的参考配置)
+        {
+            "name": "DAPlink",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceFolder}/build/Debug/Money.elf", // 要下载到调试器的文件,花括号中的是vscode两个预定义的参数
+            "request": "launch",
+            "type": "cortex-debug",
+            //使用J-link GDB Server时必须;其他GBD Server时可选（有可能帮助自动选择SVD文件）
+            //支持的设备见 https://www.segger.com/downloads/supported-devices.php
+            "device": "STM32F103C8",
+            //svd文件，有这个文件才能查看寄存器的值，每个单片机都不同。可以在以下地址找到 https://github.com/posborne/cmsis-svd
+            //该项目的根目录已经提供了C型开发板使用的外设svd文件
+            "svdFile": "STM32F103.svd",
+            "servertype": "openocd", //使用的GDB Server
+            "configFiles": [
+                "openocd_dap.cfg", // 配置文件已经在根目录提供,若要修改以此类推,openocd的路径下的share/scripts中有各种写好的配置文件
+            ],
+            "runToEntryPoint": "main", // 调试时在main函数入口停下
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 8
+            }
+        }
+    ],
+}

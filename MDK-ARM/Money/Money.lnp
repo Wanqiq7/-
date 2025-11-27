@@ -1,0 +1,25 @@
+--cpu Cortex-M3
+"money\startup_stm32f103xb.o"
+"money\main.o"
+"money\stm32f1xx_it.o"
+"money\stm32f1xx_hal_msp.o"
+"money\stm32f1xx_hal_gpio_ex.o"
+"money\stm32f1xx_hal_uart.o"
+"money\stm32f1xx_hal.o"
+"money\stm32f1xx_hal_rcc.o"
+"money\stm32f1xx_hal_rcc_ex.o"
+"money\stm32f1xx_hal_gpio.o"
+"money\stm32f1xx_hal_dma.o"
+"money\stm32f1xx_hal_cortex.o"
+"money\stm32f1xx_hal_pwr.o"
+"money\stm32f1xx_hal_flash.o"
+"money\stm32f1xx_hal_flash_ex.o"
+"money\stm32f1xx_hal_exti.o"
+"money\system_stm32f1xx.o"
+"money\mavlink_parser.o"
+"money\protocol_bridge.o"
+"money\ano_protocol.o"
+--strict --scatter "Money\Money.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "Money.map" -o Money\Money.axf
