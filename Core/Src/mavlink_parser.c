@@ -15,8 +15,9 @@
 #include <string.h>
 
 /* CRC Extra Bytes for Message IDs (from MAVLINK specification) */
-#define MAVLINK_CRC_EXTRA_OPTICAL_FLOW_RAD 49 // Message ID 0x6A (106)
-#define MAVLINK_CRC_EXTRA_DISTANCE_SENSOR 85  // Message ID 0x84 (132)
+#define MAVLINK_CRC_EXTRA_OPTICAL_FLOW_RAD                                     \
+  138 // Message ID 0x6A (106) - YouXiang specific
+#define MAVLINK_CRC_EXTRA_DISTANCE_SENSOR 85 // Message ID 0x84 (132)
 
 /**
  * @brief CRC-16-MCRF4XX lookup table
@@ -145,7 +146,14 @@ bool mavlink_parse_char(mavlink_parser_t *parser, uint8_t byte) {
   case MAVLINK_PARSE_STATE_GOT_STX:
     parser->payload_len = byte;
     crc_accumulate(byte, &parser->checksum);
-    parser->state = MAVLINK_PARSE_STATE_GOT_LENGTH;
+
+    // 锟?? Validate payload length doesn't exceed maximum allowed by protocol
+    if (parser->payload_len > MAVLINK_MAX_PAYLOAD_LEN) {
+      // Invalid payload length, frame is corrupted - reset parser
+      parser_reset(parser);
+    } else {
+      parser->state = MAVLINK_PARSE_STATE_GOT_LENGTH;
+    }
     break;
 
   case MAVLINK_PARSE_STATE_GOT_LENGTH:
@@ -169,12 +177,21 @@ bool mavlink_parse_char(mavlink_parser_t *parser, uint8_t byte) {
   case MAVLINK_PARSE_STATE_GOT_COMPID:
     parser->msgid = byte;
     crc_accumulate(byte, &parser->checksum);
-    if (parser->payload_len == 0) {
-      parser->state =
-          MAVLINK_PARSE_STATE_GOT_PAYLOAD; // 长度为0直接跳过去校验CRC
-      // 注意：如果 payload 为 0，实际上应该直接进入 CRC 状态或者根据协议处理
-      // 这里假设状态机逻辑原本是通的，仅做语法修正
-      // 此时如果不跳到 CRC1，逻辑可能有点问题，但针对报错，这里不改逻辑
+
+    // Early validation: verify message ID and payload length match
+    bool valid_message = false;
+    if ((parser->msgid == MAVLINK_MSG_ID_OPTICAL_FLOW_RAD &&
+         parser->payload_len == MAVLINK_OPTICAL_FLOW_RAD_LEN) ||
+        (parser->msgid == MAVLINK_MSG_ID_DISTANCE_SENSOR &&
+         parser->payload_len == MAVLINK_DISTANCE_SENSOR_LEN) ||
+        parser->payload_len == 0) {
+      valid_message = true;
+    }
+
+    if (!valid_message) {
+      // Unknown message type or length mismatch - discard frame
+      parser_reset(parser);
+    } else if (parser->payload_len == 0) {
       parser->state = MAVLINK_PARSE_STATE_GOT_PAYLOAD;
     } else {
       parser->state = MAVLINK_PARSE_STATE_GOT_MSGID;
@@ -182,10 +199,18 @@ bool mavlink_parse_char(mavlink_parser_t *parser, uint8_t byte) {
     break;
 
   case MAVLINK_PARSE_STATE_GOT_MSGID:
-    parser->payload[parser->payload_idx++] = byte;
-    crc_accumulate(byte, &parser->checksum);
-    if (parser->payload_idx >= parser->payload_len) {
-      parser->state = MAVLINK_PARSE_STATE_GOT_PAYLOAD;
+    //  Buffer overflow protection: check payload index boundary
+    if (parser->payload_idx < MAVLINK_MAX_PAYLOAD_LEN) {
+      parser->payload[parser->payload_idx++] = byte;
+      crc_accumulate(byte, &parser->checksum);
+
+      if (parser->payload_idx >= parser->payload_len) {
+        parser->state = MAVLINK_PARSE_STATE_GOT_PAYLOAD;
+      }
+    } else {
+      // Payload too long (>255 bytes), discard this frame and reset parser
+      // This prevents buffer overflow that would corrupt optical_flow struct
+      parser_reset(parser);
     }
     break;
 
@@ -194,9 +219,9 @@ bool mavlink_parse_char(mavlink_parser_t *parser, uint8_t byte) {
     parser->state = MAVLINK_PARSE_STATE_GOT_CRC1;
     break;
 
-  // ================= 修改重点在这里 =================
+  // ================= CRC Check =================
   case MAVLINK_PARSE_STATE_GOT_CRC1: { // <----
-                                       // 【添加左大括号】开始一个新的作用域
+                                       // CRC high byte received, now validate
     parser->crc_high = byte;
 
     // Add CRC extra byte based on message ID
@@ -234,8 +259,7 @@ bool mavlink_parse_char(mavlink_parser_t *parser, uint8_t byte) {
 
     // Reset parser for next message
     parser_reset(parser);
-  } // <---- 【添加右大括号】结束作用域
-  break;
+  } break;
     // ===============================================
 
   default:

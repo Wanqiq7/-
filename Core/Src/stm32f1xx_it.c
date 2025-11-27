@@ -279,15 +279,7 @@ void USART1_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
-  /* Check if IDLE interrupt flag is set */
-  if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE)) {
-    /* Clear IDLE interrupt flag */
-    __HAL_UART_CLEAR_IDLEFLAG(&huart2);
-
-    /* Call IDLE event callback with RxEventType = HAL_UART_RXEVENT_IDLE */
-    HAL_UARTEx_RxEventCallback(&huart2,
-                               MAVLINK_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart2.hdmarx));
-  }
+  /* Let HAL library handle IDLE interrupt completely */
   /* USER CODE END USART2_IRQn 0 */
   HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_IRQn 1 */
