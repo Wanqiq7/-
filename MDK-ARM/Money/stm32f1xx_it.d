@@ -26,4 +26,6 @@ money\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h
 money\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h
 money\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 money\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+money\stm32f1xx_it.o: ../Core/Inc/mavlink_parser.h
+money\stm32f1xx_it.o: D:\Keil5\Keil_5\ARM\ARMCC\Bin\..\include\stdbool.h
 money\stm32f1xx_it.o: ../Core/Inc/stm32f1xx_it.h
