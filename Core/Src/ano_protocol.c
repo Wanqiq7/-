@@ -66,10 +66,8 @@ static uint8_t ano_build_frame(uint8_t frame_id, const uint8_t *data,
   // Data payload
   memcpy(&buffer[idx], data, data_len);
   idx += data_len;
-
-  // Calculate checksum (from Frame ID to end of data)
   uint8_t sum_check, add_check;
-  ano_calculate_checksum(&buffer[2], 2 + data_len, &sum_check, &add_check);
+  ano_calculate_checksum(buffer, idx, &sum_check, &add_check);
 
   // Checksums
   buffer[idx++] = sum_check;

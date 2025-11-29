@@ -57,6 +57,7 @@ mavlink_parser_t mavlink_parser;
 /* DMA Receive Buffer for USART2 (MAVLINK input from optical flow sensor) */
 uint8_t mavlink_rx_buffer[MAVLINK_RX_BUFFER_SIZE];
 volatile uint16_t mavlink_rx_read_pos = 0;
+volatile uint8_t a = 0;
 
 /* Data ready flags */
 volatile uint8_t optical_flow_data_ready = 0;
@@ -130,29 +131,37 @@ int main(void) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-    /* Check for new optical flow data (set by UART IDLE interrupt) */
-    if (distance_data_ready) {
-      mavlink_distance_sensor_t distance_sensor;
-      if (mavlink_get_distance(&mavlink_parser, &distance_sensor)) {
-
-        // 更新全局高度变量 (用于光流计算)
-        current_height_cm = (float)distance_sensor.current_distance;
-
-        // 发送给飞控
-        ano_distance_data_t ano_distance;
-        if (bridge_convert_distance(&distance_sensor, &ano_distance)) {
-          ano_send_distance(&huart1, &ano_distance);
-        }
-      }
-      distance_data_ready = 0;
-    }
-
-    /* Check for new distance data (set by UART IDLE interrupt) */
     if (optical_flow_data_ready) {
       mavlink_optical_flow_rad_t optical_flow;
       if (mavlink_get_optical_flow(&mavlink_parser, &optical_flow)) {
 
+        // ==========================================================
+        // 1. 提取并处理高度数据 (新增逻辑)
+        // ==========================================================
+        // Mavlink的distance单位是米，转换为厘米
+        // 如果distance为有效值(>0)，则更新全局高度
+        if (optical_flow.distance > 0.0f) {
+          current_height_cm = optical_flow.distance * 100.0f; // m -> cm
+        } else {
+          // 如果光流包里没有有效高度，且没有外部高度源，这会导致问题
+          // 可以设置一个最小保底值防止除以0，例如 10cm
+          if (current_height_cm < 1.0f)
+            current_height_cm = 10.0f;
+        }
+
+        // ==========================================================
+        // 2. 发送 ANO 测距帧 (ID: 0x34) - 必须发送，飞控才会工作！
+        // ==========================================================
+        ano_distance_data_t ano_dist_data;
+        ano_dist_data.direction = 0; // 向下
+        ano_dist_data.angle = 0;
+        ano_dist_data.distance_cm = (uint32_t)current_height_cm;
+
+        // 立即发送测距帧
+        ano_send_distance(&huart1, &ano_dist_data);
+        // ==========================================================
+        // 3. 发送 ANO 光流帧 (ID: 0x51)
+        // ==========================================================
         ano_optical_flow_mode1_t ano_flow;
         // 传入 current_height_cm 进行转换
         if (bridge_convert_optical_flow(&optical_flow, current_height_cm,
@@ -311,8 +320,16 @@ static void MX_GPIO_Init(void) {
  * @param huart: UART handle
  * @param Size: Number of bytes received
  */
+/* USER CODE BEGIN 4 */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART2) {
+
+    // 【修复代码】处理 DMA 传输完成时的 Size 边界问题
+    // 如果 Size 等于缓冲区总长，说明 DMA 刚好填满一圈，此时写指针逻辑上回绕到 0
+    if (Size == MAVLINK_RX_BUFFER_SIZE) {
+      Size = 0;
+    }
+
     /* Process all new bytes in the circular buffer */
     while (mavlink_rx_read_pos != Size) {
       uint8_t byte = mavlink_rx_buffer[mavlink_rx_read_pos];
@@ -322,7 +339,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
       mavlink_parse_char(&mavlink_parser, byte);
     }
 
-    /* Set data ready flags (checked in main loop) */
+    /* Set data ready flags */
     if (mavlink_parser.optical_flow_ready) {
       optical_flow_data_ready = 1;
     }
@@ -331,6 +348,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
     }
   }
 }
+/* USER CODE END 4 */
 
 /* USER CODE END 4 */
 

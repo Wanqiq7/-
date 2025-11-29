@@ -27,15 +27,19 @@ Project File Date:  11/27/2025
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 6 (build 750)', folder: 'D:\Keil5\Keil_5\ARM\ARMCC\Bin'
 Build target 'Money'
-assembling startup_stm32f103xb.s...
-compiling mavlink_parser.c...
 compiling main.c...
-compiling stm32f1xx_it.c...
-compiling stm32f1xx_hal_msp.c...
-linking...
-Program Size: Code=8056 RO-data=824 RW-data=20 ZI-data=2636  
-FromELF: creating hex file...
-"Money\Money.axf" - 0 Error(s), 0 Warning(s).
+../Core/Src/main.c(152): warning:  #9-D: nested comment is not allowed
+       /* Check for new distance data (set by UART IDLE interrupt) */
+../Core/Src/main.c(176): error:  #65: expected a ";"
+    void SystemClock_Config(void) {
+../Core/Src/main.c(197): warning:  #12-D: parsing restarts here after previous syntax error
+                                    RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+../Core/Src/main.c(198): warning:  #111-D: statement is unreachable
+      RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+../Core/Src/main.c(198): error:  #20: identifier "RCC_ClkInitStruct" is undefined
+      RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+../Core/Src/main.c: 3 warnings, 2 errors
+"Money\Money.axf" - 2 Error(s), 3 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -59,6 +63,7 @@ Package Vendor: Keil
 
    * Component: ARM::CMSIS:CORE@6.1.0
       Include file:  CMSIS/Core/Include/tz_context.h
+Target not created.
 Build Time Elapsed:  00:00:01
 </pre>
 </body>

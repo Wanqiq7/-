@@ -1,7 +1,5 @@
 money\ano_protocol.o: ..\Core\Src\ano_protocol.c
 money\ano_protocol.o: ../Core/Inc/ano_protocol.h
-money\ano_protocol.o: D:\Keil5\Keil_5\ARM\ARMCC\Bin\..\include\stdint.h
-money\ano_protocol.o: D:\Keil5\Keil_5\ARM\ARMCC\Bin\..\include\stdbool.h
 money\ano_protocol.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h
 money\ano_protocol.o: ../Core/Inc/stm32f1xx_hal_conf.h
 money\ano_protocol.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rcc.h
@@ -9,6 +7,7 @@ money\ano_protocol.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_def.h
 money\ano_protocol.o: ../Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f1xx.h
 money\ano_protocol.o: ../Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xb.h
 money\ano_protocol.o: ../Drivers/CMSIS/Include/core_cm3.h
+money\ano_protocol.o: D:\Keil5\Keil_5\ARM\ARMCC\Bin\..\include\stdint.h
 money\ano_protocol.o: ../Drivers/CMSIS/Include/cmsis_version.h
 money\ano_protocol.o: ../Drivers/CMSIS/Include/cmsis_compiler.h
 money\ano_protocol.o: ../Drivers/CMSIS/Include/cmsis_armcc.h
@@ -27,4 +26,5 @@ money\ano_protocol.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h
 money\ano_protocol.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h
 money\ano_protocol.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 money\ano_protocol.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+money\ano_protocol.o: D:\Keil5\Keil_5\ARM\ARMCC\Bin\..\include\stdbool.h
 money\ano_protocol.o: D:\Keil5\Keil_5\ARM\ARMCC\Bin\..\include\string.h
