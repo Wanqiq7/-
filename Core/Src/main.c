@@ -146,7 +146,7 @@ int main(void) {
           // 如果光流包里没有有效高度，且没有外部高度源，这会导致问题
           // 可以设置一个最小保底值防止除以0，例如 10cm
           if (current_height_cm < 1.0f)
-            current_height_cm = 10.0f;
+            current_height_cm = 1.0f;
         }
 
         // ==========================================================
@@ -158,7 +158,7 @@ int main(void) {
         ano_dist_data.distance_cm = (uint32_t)current_height_cm;
 
         // 立即发送测距帧
-        ano_send_distance(&huart1, &ano_dist_data);
+        ano_send_distance_dma(&huart1, &ano_dist_data);
         // ==========================================================
         // 3. 发送 ANO 光流帧 (ID: 0x51)
         // ==========================================================
@@ -166,7 +166,7 @@ int main(void) {
         // 传入 current_height_cm 进行转换
         if (bridge_convert_optical_flow(&optical_flow, current_height_cm,
                                         &ano_flow)) {
-          ano_send_optical_flow_mode1(&huart1, &ano_flow);
+          ano_send_optical_flow_mode1_dma(&huart1, &ano_flow);
         }
       }
       optical_flow_data_ready = 0;
