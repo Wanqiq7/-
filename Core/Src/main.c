@@ -53,7 +53,7 @@ DMA_HandleTypeDef hdma_usart2_rx;
 /* USER CODE BEGIN PV */
 /* MAVLINK Parser */
 mavlink_parser_t mavlink_parser;
-
+float global_height_cm = 0.0f;
 /* DMA Receive Buffer for USART2 (MAVLINK input from optical flow sensor) */
 uint8_t mavlink_rx_buffer[MAVLINK_RX_BUFFER_SIZE];
 volatile uint16_t mavlink_rx_read_pos = 0;
@@ -131,54 +131,54 @@ int main(void) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+    // ---------------------------------------------------------
+    // 1. 异步接收测距数据 (仅更新变量，不发送)
+    // ---------------------------------------------------------
+    if (distance_data_ready) {
+      mavlink_distance_sensor_t dist_msg;
+      if (mavlink_get_distance(&mavlink_parser, &dist_msg)) {
+        global_height_cm = (float)dist_msg.current_distance;
+      }
+      distance_data_ready = 0;
+    }
+
+    // ---------------------------------------------------------
+    // 2. 接收到光流数据 -> 触发全阻塞发送
+    // ---------------------------------------------------------
     if (optical_flow_data_ready) {
       mavlink_optical_flow_rad_t optical_flow;
       if (mavlink_get_optical_flow(&mavlink_parser, &optical_flow)) {
 
-        // ==========================================================
-        // 1. 提取并处理高度数据
-        // ==========================================================
-        if (optical_flow.distance > 0.0f) {
-          current_height_cm = optical_flow.distance * 100.0f; // m -> cm
-        } else {
-          // 限制最小有效高度，防止除以0
-          if (current_height_cm < 1e-5f)
-            current_height_cm = 1e-5f;
-        }
+        // --- 数据准备 ---
+        float use_height =
+            (global_height_cm < 1e-5f) ? 1e-5f : global_height_cm;
 
-        // ==========================================================
-        // 2. 发送 ANO 测距帧 (ID: 0x34)
-        // ==========================================================
+        // --- 第一帧：测距帧 (0x34) ---
         ano_distance_data_t ano_dist_data;
         ano_dist_data.direction = 0;
         ano_dist_data.angle = 0;
-        ano_dist_data.distance_cm = (uint32_t)current_height_cm;
+        ano_dist_data.distance_cm = (uint32_t)use_height;
 
-        // [发送1] 启动 DMA 发送测距帧
-        ano_send_distance_dma(&huart1, &ano_dist_data);
+        // [修改1] 使用阻塞发送函数 (非DMA)
+        // 注意：这里调用的是 ano_send_distance，不是 ano_send_distance_dma
+        ano_send_distance(&huart1, &ano_dist_data);
 
-        // ==========================================================
-        // 【关键优化】等待上一次 DMA 发送完成
-        // ==========================================================
-        // HAL_UART_Transmit_DMA 需要串口状态为 READY 才会执行
-        // 如果上一次发送没结束，状态会是 BUSY_TX，导致第二次发送被拒
-        // 这里死循环等待，直到串口状态变回 READY
-        // 注意：& 0x01 是为了检测 BUSY_TX (0x21) 的最低位，兼容性更好
-        while (HAL_UART_GetState(&huart1) != HAL_UART_STATE_READY) {
-          __NOP(); // 空指令，防止编译器过度优化
-        }
+        // [关键] 物理延时
+        // 既然放弃了DMA，就加入微小的延时，给飞控接收端喘息时间，防止粘包
+        HAL_Delay(1);
 
-        // ==========================================================
-        // 3. 发送 ANO 光流帧 (ID: 0x51)
-        // ==========================================================
+        // --- 第二帧：光流帧 (0x51) ---
         ano_optical_flow_mode1_t ano_flow;
-        // 传入 current_height_cm 进行转换
-        if (bridge_convert_optical_flow(&optical_flow, current_height_cm,
-                                        &ano_flow)) {
-          // [发送2] 启动 DMA 发送光流帧
-          ano_send_optical_flow_mode1_dma(&huart1, &ano_flow);
+        // 计算数据
+        if (bridge_convert_optical_flow(&optical_flow, use_height, &ano_flow)) {
+
+          // [修改2] 使用阻塞发送函数 (非DMA)
+          // 注意：这里调用的是 ano_send_optical_flow_mode1
+          ano_send_optical_flow_mode1(&huart1, &ano_flow);
         }
       }
+      // 清除标志位
       optical_flow_data_ready = 0;
     }
   }
