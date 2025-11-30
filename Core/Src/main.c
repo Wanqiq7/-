@@ -144,7 +144,7 @@ int main(void) {
     }
 
     // ---------------------------------------------------------
-    // 2. 接收到光流数据 -> 触发全阻塞发送
+    // 2. 接收到光流数据 -> 触发 DMA 发送
     // ---------------------------------------------------------
     if (optical_flow_data_ready) {
       mavlink_optical_flow_rad_t optical_flow;
@@ -160,22 +160,28 @@ int main(void) {
         ano_dist_data.angle = 0;
         ano_dist_data.distance_cm = (uint32_t)use_height;
 
-        // [修改1] 使用阻塞发送函数 (非DMA)
-        // 注意：这里调用的是 ano_send_distance，不是 ano_send_distance_dma
-        ano_send_distance(&huart1, &ano_dist_data);
+        // [修改1] 确保串口空闲，防止上一轮传输未结束
+        // 注意：如果你系统的发送频率非常高，可能需要在这里加超时处理，防止死循环
+        while (HAL_UART_GetState(&huart1) != HAL_UART_STATE_READY) {
+          // 等待直到串口就绪
+        }
 
-        // [关键] 物理延时
-        // 既然放弃了DMA，就加入微小的延时，给飞控接收端喘息时间，防止粘包
-        HAL_Delay(1);
+        // [修改2] 使用 DMA 发送函数
+        ano_send_distance_dma(&huart1, &ano_dist_data);
 
         // --- 第二帧：光流帧 (0x51) ---
         ano_optical_flow_mode1_t ano_flow;
         // 计算数据
         if (bridge_convert_optical_flow(&optical_flow, use_height, &ano_flow)) {
 
-          // [修改2] 使用阻塞发送函数 (非DMA)
-          // 注意：这里调用的是 ano_send_optical_flow_mode1
-          ano_send_optical_flow_mode1(&huart1, &ano_flow);
+          // [修改3] 等待上一帧（测距帧）DMA 发送完成
+          // 这一步至关重要，否则第二帧会因为串口忙碌（HAL_BUSY）而发送失败
+          while (HAL_UART_GetState(&huart1) != HAL_UART_STATE_READY) {
+            // 等待直到串口就绪
+          }
+
+          // [修改4] 使用 DMA 发送函数
+          ano_send_optical_flow_mode1_dma(&huart1, &ano_flow);
         }
       }
       // 清除标志位
@@ -183,7 +189,6 @@ int main(void) {
     }
   }
 }
-/* USER CODE END 3 */
 
 /**
  * @brief System Clock Configuration
