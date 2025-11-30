@@ -3,7 +3,7 @@
 #include <string.h>
 
 // 滤波系数
-#define FLOW_LPF_ALPHA 0.85f
+#define FLOW_LPF_ALPHA 0.80f
 
 // 限幅辅助函数
 static int16_t constrain_int16(float val) {
@@ -38,7 +38,6 @@ bool bridge_convert_optical_flow(const mavlink_optical_flow_rad_t *mavlink_flow,
 
   if (mavlink_flow->integration_time_us > 0) {
     float dt_s = (float)mavlink_flow->integration_time_us / 1000000.0f;
-    float valid_dist = (distance_cm > 10.0f) ? distance_cm : 10.0f;
 
     // ============================================================
     // 【核心修改】: 光流数据 -> 飞控坐标系映射
@@ -47,12 +46,12 @@ bool bridge_convert_optical_flow(const mavlink_optical_flow_rad_t *mavlink_flow,
     // 1. 飞控 X 轴 (机头) 速度
     // 数据源: 光流 Y (integrated_y)
     // 逻辑: integrated_y 代表纵向运动，无需取反
-    raw_vel_fc_x = (mavlink_flow->integrated_y / dt_s) * valid_dist;
+    raw_vel_fc_x = (mavlink_flow->integrated_y / dt_s) * distance_cm;
 
     // 2. 飞控 Y 轴 (左侧) 速度
     // 数据源: 光流 X (integrated_x)
     // 逻辑: integrated_x 代表横向运动，且左移产生正值，无需取反
-    raw_vel_fc_y = (mavlink_flow->integrated_x / dt_s) * valid_dist;
+    raw_vel_fc_y = (mavlink_flow->integrated_x / dt_s) * distance_cm;
   }
 
   // 4. 执行低通滤波

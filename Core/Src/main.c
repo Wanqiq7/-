@@ -136,29 +136,38 @@ int main(void) {
       if (mavlink_get_optical_flow(&mavlink_parser, &optical_flow)) {
 
         // ==========================================================
-        // 1. 提取并处理高度数据 (新增逻辑)
+        // 1. 提取并处理高度数据
         // ==========================================================
-        // Mavlink的distance单位是米，转换为厘米
-        // 如果distance为有效值(>0)，则更新全局高度
         if (optical_flow.distance > 0.0f) {
           current_height_cm = optical_flow.distance * 100.0f; // m -> cm
         } else {
-          // 如果光流包里没有有效高度，且没有外部高度源，这会导致问题
-          // 可以设置一个最小保底值防止除以0，例如 10cm
-          if (current_height_cm < 1.0f)
-            current_height_cm = 1.0f;
+          // 限制最小有效高度，防止除以0
+          if (current_height_cm < 1e-5f)
+            current_height_cm = 1e-5f;
         }
 
         // ==========================================================
-        // 2. 发送 ANO 测距帧 (ID: 0x34) - 必须发送，飞控才会工作！
+        // 2. 发送 ANO 测距帧 (ID: 0x34)
         // ==========================================================
         ano_distance_data_t ano_dist_data;
-        ano_dist_data.direction = 0; // 向下
+        ano_dist_data.direction = 0;
         ano_dist_data.angle = 0;
         ano_dist_data.distance_cm = (uint32_t)current_height_cm;
 
-        // 立即发送测距帧
+        // [发送1] 启动 DMA 发送测距帧
         ano_send_distance_dma(&huart1, &ano_dist_data);
+
+        // ==========================================================
+        // 【关键优化】等待上一次 DMA 发送完成
+        // ==========================================================
+        // HAL_UART_Transmit_DMA 需要串口状态为 READY 才会执行
+        // 如果上一次发送没结束，状态会是 BUSY_TX，导致第二次发送被拒
+        // 这里死循环等待，直到串口状态变回 READY
+        // 注意：& 0x01 是为了检测 BUSY_TX (0x21) 的最低位，兼容性更好
+        while (HAL_UART_GetState(&huart1) != HAL_UART_STATE_READY) {
+          __NOP(); // 空指令，防止编译器过度优化
+        }
+
         // ==========================================================
         // 3. 发送 ANO 光流帧 (ID: 0x51)
         // ==========================================================
@@ -166,14 +175,15 @@ int main(void) {
         // 传入 current_height_cm 进行转换
         if (bridge_convert_optical_flow(&optical_flow, current_height_cm,
                                         &ano_flow)) {
+          // [发送2] 启动 DMA 发送光流帧
           ano_send_optical_flow_mode1_dma(&huart1, &ano_flow);
         }
       }
       optical_flow_data_ready = 0;
     }
   }
-  /* USER CODE END 3 */
 }
+/* USER CODE END 3 */
 
 /**
  * @brief System Clock Configuration
@@ -325,7 +335,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART2) {
 
     // 【修复代码】处理 DMA 传输完成时的 Size 边界问题
-    // 如果 Size 等于缓冲区总长，说明 DMA 刚好填满一圈，此时写指针逻辑上回绕到 0
+    // 如果 Size 等于缓冲区总长，说明 DMA 刚好填满一圈，此时写指针逻辑上回绕到
+    // 0
     if (Size == MAVLINK_RX_BUFFER_SIZE) {
       Size = 0;
     }
@@ -358,7 +369,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
  */
 void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
+  /* User can add his own implementation to report the HAL error return state
+   */
   __disable_irq();
   while (1) {
   }
@@ -375,8 +387,8 @@ void Error_Handler(void) {
 void assert_failed(uint8_t *file, uint32_t line) {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line
-     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
-     line) */
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n",
+     file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

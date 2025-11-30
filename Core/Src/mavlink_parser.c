@@ -1,16 +1,3 @@
-/**
- ******************************************************************************
- * @file           : mavlink_parser.c
- * @brief          : MAVLINK PX4 Protocol Parser Implementation
- ******************************************************************************
- * @attention
- *
- * MAVLINK v1 Parser Implementation
- * Based on YouXiang optical flow sensor reference code
- *
- ******************************************************************************
- */
-
 #include "mavlink_parser.h"
 #include <string.h>
 
